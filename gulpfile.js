@@ -4,28 +4,18 @@ const gulp = require('gulp');  //https://www.npmjs.com/package/gulp-4.0.build
 const sass = require('gulp-sass');  //https://www.npmjs.com/package/gulp-sass/
 const jade = require('gulp-jade'); //https://www.npmjs.com/package/gulp-jade/
 const debug = require('gulp-debug');  //https://www.npmjs.com/package/gulp-debug/
-const imagemin = require('gulp-imagemin'); //https://www.npmjs.com/package/gulp-imagemin/
-const rename = require('gulp-rename');  //https://www.npmjs.com/package/gulp-rename/
 const browserSync = require("browser-sync").create();  //https://www.npmjs.com/package/browser-sync
 const reload = browserSync.reload;
-const uncss = require('gulp-uncss'); // Удаляет неиспользуемые стили. https://www.npmjs.com/package/gulp-uncss/
 const sourcemaps = require('gulp-sourcemaps');  //https://www.npmjs.com/package/gulp-sourcemaps
 const del = require('del'); // Удаляет файлы. https://www.npmjs.com/package/del
 const newer = require('gulp-newer'); // копирует только новые файлы. https://www.npmjs.com/package/gulp-newer
-const concat = require('gulp-concat-css'); // объединяет файлы-css
+const autoprefixer = require('gulp-autoprefixer');  //https://www.npmjs.com/package/gulp-autoprefixer/
+
 
 /* Обработка ошибок */
 const notify = require('gulp-notify'); // https://www.npmjs.com/package/gulp-notify
 const plumber = require('gulp-plumber'); // передает onError через все потоки по цепочке
 
-const webpackStream  = require('webpack-stream');
-const webpack = webpackStream.webpack;
-const wpath = require('path');
-const autoprefixer = require('gulp-autoprefixer');  //https://www.npmjs.com/package/gulp-autoprefixer/
-const cleanCSS = require('gulp-clean-css');  //https://github.com/scniro/gulp-clean-css
-const named = require('vinyl-named');  //определяет какой файл в какую сборку по названию
-const gulplog = require('gulplog');
-//const svgSprite = require('gulp-svg-sprite'); //https://www.youtube.com/watch?v=VqYAitDKbpo&list=PLDyvV36pndZFLTE13V4qNWTZbeipNhCgQ&index=13
 
 /************************************************/
 
@@ -60,15 +50,11 @@ const path = {
 		],
 		assets: 'assets/css/*.*',
 		style: 'src/css/*.css',
-		img: 'src/img/**/*.*',
-		imgcomponents: 'public/js/img/**/*.*'
+		img: 'src/img/**/*.*'
 	},
 	clean: { // Файлы, которые нужно удалить после сборки
 		map: 'public/css/*.map',
-		jsmap: 'public/js/*.map',
-		includes: 'public/includes',
-		modules: 'public/js/modules',
-		imgcomponents: 'public/js/img'
+		includes: 'public/includes'
 	}
 };
 
@@ -153,125 +139,12 @@ gulp.task('sass', function () {
 		.pipe(gulp.dest(path.public.style))
 });
 
-gulp.task('imgcomponents', function () {
-	return gulp.src(path.watch.imgcomponents)
-		.pipe(plumber({
-			errorHandler: notify.onError(function(err) {
-				return {
-					title: 'imgcomponents',
-					message: err.message
-				};
-			})
-		}))
-		.pipe(gulp.dest(path.public.img))
-});
-
-gulp.task('webpack', function(callback) {
-	// сигнализируем об окончании сборки, чтоб не подвешивать поток
-	let firstBuildReady = false;
-
-	function done(err, stats) {
-		firstBuildReady = true;
-
-		if (err) { // hard error - ломает сборку
-			return;
-		}
-
-		gulplog[stats.hasErrors() ? 'error' : 'info'](stats.toString({
-			colors: true
-		}));
-	}
-
-	let options = {
-		//entry: "src/js/**/*.js",
-		//output: {
-		//	path: __dirname + '/public/new',
-		//	filename: "main.js"
-		//},
-
-		watch: true,
-		//devtool: 'source-map',
-
-		/* loader - это то, что преобразовывает файлы */
-		module: {
-			loaders: [
-				{
-					test: /\.js?$/,
-					include: wpath.resolve(__dirname),
-					exclude: /(node_modules|bower_components)/,
-					loader: "babel",
-					query: {
-						presets: ['es2015'],
-						plugins: ['transform-es2015-modules-commonjs']
-					}
-				},
-				{
-					test: /\.(png|jpg|svg|ttf|eot|woff|woff2)$/,
-					//loader: 'file?name=[path][name].[ext]'
-					loader: 'file?name='+'./img/imgComponents/'+'[name].[ext]'
-				},{
-					test: /\.jade/,
-					loader: 'jade'
-				},
-				{
-					test: /\.scss$/,
-					loader: 'style!css!resolve-url!sass'  // необходимо установить все эти лоадеры
-				}
-			]
-		},
-
-		plugins: [
-			//new webpack.optimize.UglifyJsPlugin({
-			//	compress: {
-			//		warnings: false
-			//	}
-			//})
-
-			/* Выносим общие куски файлов js в отдельный common.js */
-			/* https://www.youtube.com/watch?v=aET3GxoHBug&list=PLDyvV36pndZHfBThhg4Z0822EEG9VGenn&index=14 */
-			//new webpack.optimize.CommonsChunkPlugin({
-			//	name: "common",
-			//  minChunks: 2  // выносит общие модули, если их используют мин. 2 файла js
-			//}),
-
-			/* Если ошибка, сборку останавливаем */
-			new webpack.NoErrorsPlugin()
-		]
-	};
-
-	return gulp.src(path.watch.scripts)
-		.pipe(plumber({
-			errorHandler: notify.onError(err => ({
-				title: 'Webpack',
-				message: err.message
-			}))
-		}))
-		.pipe(named())
-		.pipe(webpackStream(options, null, done))
-		.pipe(gulp.dest(path.public.scripts))
-		.on('data', function() { // эмулируем завершение сборки (хак)
-			if (firstBuildReady) {
-				callback();
-			}
-		});
-});
 
 gulp.task('clean', function () {
-	return del([path.clean.includes, path.clean.jsmap, path.clean.map, path.clean.modules, path.clean.imgcomponents]);
+	return del([path.clean.includes, path.clean.map]);
 });
 
-gulp.task('clean-css', function () {
-	return gulp.src('public/css/style.css')
-		//.pipe(debug({title: "cleanCSS;"}))
-		.pipe(uncss({
-			html: [path.watch.html]
-		}))
-		.pipe(cleanCSS({compatibility: 'ie8'}))
-		//.pipe(rename({suffix: '.min'}))
-		.pipe(gulp.dest(path.public.style))
-});
-
-gulp.task('imagemin', function () {
+gulp.task('imagecopy', function () {
 	return gulp.src(path.watch.img)
 		.pipe(plumber({
 			errorHandler: notify.onError(function(err) {
@@ -283,12 +156,6 @@ gulp.task('imagemin', function () {
 		}))
 		.pipe(newer(path.public.img))
 		//.pipe(debug({title: "imagemin;"}))
-		.pipe(imagemin({
-			progressive: true,
-			svgoPlugins: [{removeViewBox: false}],
-			// use: [pngquant()],
-			interlaced: true
-		}))
 		.pipe(gulp.dest(path.public.img))
 });
 
@@ -312,17 +179,13 @@ gulp.task('watch', function() {
 	gulp.watch(path.watch.jade, gulp.series('jade'));
 	gulp.watch(path.watch.jadeIncl, gulp.series('jadeAll'));
 	gulp.watch(path.watch.assets, gulp.series('assets'));
-	gulp.watch(path.watch.img, gulp.series('imagemin'));
-	gulp.watch(path.watch.imgcomponents, gulp.series('imgcomponents'));
+	gulp.watch(path.watch.img, gulp.series('imagecopy'));
 });
 
 gulp.task('default', gulp.series(
-	gulp.parallel('jade', 'sass', 'assets', 'imgcomponents', 'imagemin', 'webpack'),
+	gulp.parallel('jade', 'sass', 'assets'),
 	gulp.parallel('watch', 'browserSync')
 	)
 );
 
-gulp.task('build', gulp.series(
-	'clean',
-	gulp.parallel('imagemin', 'clean-css'))
-);
+gulp.task('build', gulp.series('clean'));
